@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Thermometer Reading Trainer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<style>
+:root{box-sizing:border-box;--bg:#0f172a;--panel:#1e293b;--line:#334155;--text:#e2e8f0;--mute:#94a2b8;--accent:#f59e0b;--ok:#34d399;--bad:#fb7185;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--text);font-family:'Atkinson Hyperlegible',system-ui,Arial,sans-serif;min-height:100vh}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px}
+.btn{display:inline-flex;align-items:center;gap:.5rem;padding:.6rem .95rem;border-radius:10px;border:1px solid var(--line);background:#273449;color:var(--text);font:inherit;font-weight:700;cursor:pointer;line-height:1.1;text-align:left}
+.btn small{display:block;font-weight:400;font-size:.72rem;color:var(--mute)}
+.btn:hover{background:#31405a}
+.btn:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.btn svg{width:20px;height:20px;flex:none}
+.btn.on{background:#3a2c08;border-color:var(--accent)}
+.go{background:#14532d;border-color:#22c55e}.go:hover{background:#166534}
+.stop{background:#7f1d1d;border-color:#f87171}.stop:hover{background:#991b1b}
+#scroller{height:min(76vh,640px);overflow-y:scroll;overflow-x:hidden;border-radius:12px;background:#0b1220;border:1px solid var(--line);position:relative}
+#cv{display:block;margin:0 auto}
+#lens{position:absolute;width:200px;height:200px;border-radius:50%;border:4px solid #cbd5e1;box-shadow:0 6px 24px rgba(0,0,0,.6);cursor:grab;touch-action:none;display:none;overflow:hidden;background:#0b1220}
+#lens canvas{display:block;width:100%;height:100%}
+#ans{width:100%;font:inherit;font-size:2.4rem;font-weight:700;text-align:center;padding:.5rem;border-radius:12px;border:2px solid var(--accent);background:#0b1220;color:#fff}
+.fb{border-left:4px solid var(--line);padding:.6rem .8rem;background:#0b1220;border-radius:8px;font-size:.95rem;line-height:1.5}
+.fb.ok{border-color:var(--ok)}.fb.bad{border-color:var(--bad)}
+.stat b{display:block;font-size:1.7rem}
+</style>
+</head>
+<body>
+<main class="max-w-5xl mx-auto p-3 sm:p-5">
+  <h1 class="text-2xl font-bold mb-1">Thermometer Reading Trainer</h1>
+  <p class="mb-4" style="color:var(--mute)">Each smallest division = 1 °C. Estimate to the nearest 0.5 °C. Keep your eye level with the tip of the red thread to avoid parallax error.</p>
+
+  <div class="flex flex-wrap gap-2 mb-4">
+    <button class="btn go" id="bStart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3c1 4 5 6 5 11a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-4 1-7 1-10z"/></svg><span>Start Heating</span></button>
+    <button class="btn stop" id="bStop"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg><span>Stop</span></button>
+    <button class="btn" id="bReset"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5"/></svg><span>Reset</span></button>
+    <button class="btn" id="bNew"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg><span>New Question<small>Random reading</small></span></button>
+    <button class="btn" id="bLens" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="10" r="6"/><path d="m15 15 6 6M7 10h6"/></svg><span>Zoom Glass<small>2.5× magnifier</small></span></button>
+  </div>
+
+  <div class="grid gap-4 lg:grid-cols-[minmax(0,320px)_1fr]">
+    <section class="panel p-3">
+      <div class="flex justify-between items-center mb-2 text-sm" style="color:var(--mute)">
+        <span id="status" aria-live="polite">Ready</span><span>Scroll to see the full scale</span>
+      </div>
+      <div id="wrap" style="position:relative">
+        <div id="scroller"><canvas id="cv"></canvas></div>
+        <div id="lens" aria-label="Magnifying glass: drag to move"><canvas id="lc"></canvas></div>
+      </div>
+    </section>
+
+    <section class="flex flex-col gap-4">
+      <div class="panel p-5" style="border-color:var(--accent)">
+        <label for="ans" class="block font-bold text-lg mb-2">Key In Temperature Reading (°C)</label>
+        <input id="ans" type="number" step="0.1" inputmode="decimal" placeholder="e.g. 28.5">
+        <div class="flex flex-wrap gap-2 mt-3">
+          <button class="btn go" id="bCheck" style="flex:1;justify-content:center;font-size:1.05rem">CHECK ANSWER</button>
+          <button class="btn" id="bShow" style="justify-content:center">Show Answer</button>
+        </div>
+        <div id="fb" class="mt-4" aria-live="polite"></div>
+      </div>
+      <div class="panel p-4 grid grid-cols-3 text-center stat">
+        <div><b id="sA">0</b>Attempted</div>
+        <div><b id="sC" style="color:var(--ok)">0</b>Correct</div>
+        <div><b id="sP" style="color:var(--accent)">0%</b>Accuracy</div>
+      </div>
+      <div class="panel p-4 text-sm" style="color:var(--mute);line-height:1.6">
+        An answer within ±0.5 °C of the true reading is marked correct. Below 0 °C the numbers get larger going down the scale, so −10 is the lowest mark.
+      </div>
+    </section>
+  </div>
+</main>
+
+<script>
+(function(){
+const TMIN=-10,TMAX=110,PPU=16,TOP=70,CW=230,CX=166;
+const yOf=t=>TOP+(TMAX-t)*PPU;
+const CH=yOf(TMIN)+150;
+const $=id=>document.getElementById(id);
+const cv=$('cv'),ctx=cv.getContext('2d'),sc=$('scroller'),lens=$('lens'),lc=$('lc'),lctx=lc.getContext('2d'),wrap=$('wrap');
+let temp=25,heating=false,last=0,panUntil=0,lensOn=false,lx=0,ly=0,stats={a:0,c:0};
+
+function setup(c,w,h){const d=window.devicePixelRatio||1;c.width=Math.round(w*d);c.height=Math.round(h*d);if(c===cv){c.style.width=w+'px';c.style.height=h+'px'}return d}
+
+function draw(g,z,tx,ty,clipR){
+  g.save();
+  if(clipR){g.fillStyle='#0b1220';g.fillRect(0,0,clipR*2,clipR*2)}
+  g.translate(tx,ty);g.scale(z,z);
+  const yT=yOf(TMAX),yB=yOf(TMIN),bc=yB+62;
+  // backing
+  g.fillStyle='#f8fafc';g.beginPath();g.roundRect(24,yT-40,176,(yB+34)-(yT-40),10);g.fill();
+  g.strokeStyle='#cbd5e1';g.lineWidth=1;g.stroke();
+  // ticks
+  g.fillStyle='#000';g.strokeStyle='#000';g.textAlign='right';g.textBaseline='middle';g.font='bold 16px Arial,Helvetica,sans-serif';
+  for(let t=TMIN;t<=TMAX;t++){
+    const y=yOf(t);let x0,lw;
+    if(t%10===0){x0=84;lw=2.6}else if(t%5===0){x0=100;lw=1.9}else{x0=118;lw=1.2}
+    g.lineWidth=lw;g.beginPath();g.moveTo(x0,y);g.lineTo(150,y);g.stroke();
+    if(t%10===0)g.fillText(String(t),x0-8,y);
+  }
+  // glass stem
+  const gr=g.createLinearGradient(150,0,182,0);
+  gr.addColorStop(0,'rgba(180,210,230,.55)');gr.addColorStop(.3,'rgba(255,255,255,.55)');gr.addColorStop(1,'rgba(150,185,210,.55)');
+  g.fillStyle=gr;g.strokeStyle='rgba(60,90,120,.7)';g.lineWidth=1.5;
+  g.beginPath();g.roundRect(150,yT-34,32,bc-(yT-34),16);g.fill();g.stroke();
+  // bulb glass
+  g.beginPath();g.arc(CX,bc,26,0,7);g.fill();g.stroke();
+  // liquid
+  g.fillStyle='#e11d2e';g.beginPath();g.arc(CX,bc,19,0,7);g.fill();
+  const yl=yOf(temp);
+  g.fillRect(CX-2.5,yl,5,bc-yl);
+  g.beginPath();g.arc(CX,yl,2.5,Math.PI,0);g.fill();
+  g.fillStyle='rgba(255,255,255,.55)';g.fillRect(CX-1.6,yl+4,1.2,Math.max(0,bc-yl-30));
+  g.beginPath();g.arc(CX-7,bc-6,5,0,7);g.fill();
+  g.restore();
+}
+
+function render(){
+  draw(ctx,1,0,0,0);
+  if(lensOn)renderLens();
+}
+function renderLens(){
+  const d=window.devicePixelRatio||1,r=100;
+  lctx.setTransform(d,0,0,d,0,0);
+  lctx.clearRect(0,0,200,200);
+  const cLeft=(sc.clientWidth-CW)/2;
+  const wx=lx-cLeft,wy=sc.scrollTop+ly;
+  lctx.save();lctx.beginPath();lctx.arc(r,r,r,0,7);lctx.clip();
+  draw(lctx,2.5,r-wx*2.5,r-wy*2.5,r);
+  lctx.strokeStyle='rgba(30,41,59,.9)';lctx.lineWidth=1.5;lctx.beginPath();lctx.moveTo(0,r);lctx.lineTo(200,r);lctx.stroke();
+  lctx.strokeStyle='rgba(30,41,59,.35)';lctx.beginPath();lctx.moveTo(r,0);lctx.lineTo(r,200);lctx.stroke();
+  lctx.restore();
+}
+function resize(){
+  const d=setup(cv,CW,CH);ctx.setTransform(d,0,0,d,0,0);
+  setup(lc,200,200);render();
+}
+function center(smooth){
+  const t=Math.max(0,yOf(temp)-sc.clientHeight/2);
+  sc.scrollTo({top:t,behavior:smooth?'smooth':'auto'});
+}
+function status(s){$('status').textContent=s}
+
+function frame(ts){
+  if(!heating)return;
+  const dt=Math.min(.05,(ts-last)/1000);last=ts;
+  temp+=1.8*dt;
+  if(temp>=TMAX){temp=TMAX;stopHeat();return}
+  render();
+  if(ts>panUntil)sc.scrollTop=Math.max(0,yOf(temp)-sc.clientHeight/2);
+  if(lensOn)followLens();
+  requestAnimationFrame(frame);
+}
+function followLens(){renderLens()}
+function startHeat(){
+  if(heating)return;
+  if(temp>=TMAX)temp=25;
+  heating=true;last=performance.now();clearFb();status('Heating…');
+  requestAnimationFrame(frame);
+}
+function stopHeat(){
+  if(!heating&&temp===Math.round(temp*2)/2){return}
+  heating=false;temp=Math.round(temp*2)/2;render();status('Stopped – read the scale');
+}
+function reset(){heating=false;temp=25;clearFb();$('ans').value='';render();center(true);status('Ready')}
+function newQ(){
+  heating=false;temp=-8+0.5*Math.floor(Math.random()*227);
+  clearFb();$('ans').value='';render();center(true);status('New question – read the scale');
+  setTimeout(()=>{if(lensOn){snapLens();renderLens()}},450);
+}
+function clearFb(){$('fb').innerHTML=''}
+function fmt(n){return n.toFixed(1)}
+
+function explain(a){
+  const low=Math.floor(a/10)*10, div=a-low, whole=Math.floor(div+1e-9), half=(div-whole)>0.01;
+  let s=`<ol class="list-decimal pl-5 space-y-1">
+  <li>Nearest major (10 °C) mark <b>below</b> the reading: <b>${low} °C</b>.</li>
+  <li>Small 1 °C divisions above ${low} °C: <b>${whole}</b>${half?' plus <b>half a division</b>':''}.`;
+  if(a<0)s+=`<br>Reminder, below 0 °C: ${fmt(a)} °C is <b>${fmt(-a)} °C below zero</b>. Values get smaller going down toward −10, so count up from ${low} °C (${whole}${half?'.5':''} divisions) or count down from 0 °C.`;
+  s+=`</li><li>Final reading: ${low} + ${fmt(div)} = <b>${fmt(a)} °C</b>.</li></ol>`;
+  return s;
+}
+function check(){
+  if(heating){$('fb').innerHTML='<div class="fb bad">Press <b>Stop</b> first, then read the scale.</div>';return}
+  const raw=$('ans').value;
+  if(raw===''||isNaN(parseFloat(raw))){$('fb').innerHTML='<div class="fb bad">Key in your temperature reading first.</div>';return}
+  const v=Math.round(parseFloat(raw)*10)/10,a=temp,err=Math.abs(v-a);
+  const ok=err<=0.5+1e-9;
+  stats.a++;if(ok)stats.c++;updStats();
+  const head=ok?(err<1e-9?`<b>Exact!</b> ${fmt(a)} °C.`:`<b>Accepted</b> (within ±0.5 °C). True reading ${fmt(a)} °C; your answer ${fmt(v)} °C.`)
+              :`<b>Not quite.</b> Your answer ${fmt(v)} °C is ${fmt(err)} °C off. Try again or press Show Answer.`;
+  $('fb').innerHTML=`<div class="fb ${ok?'ok':'bad'}"><p class="mb-2">${head}</p>${ok?explain(a):''}</div>`;
+}
+function show(){
+  if(heating){$('fb').innerHTML='<div class="fb bad">Press <b>Stop</b> first.</div>';return}
+  $('fb').innerHTML=`<div class="fb"><p class="mb-2">Actual reading: <b>${fmt(temp)} °C</b></p>${explain(temp)}</div>`;
+}
+function updStats(){
+  $('sA').textContent=stats.a;$('sC').textContent=stats.c;
+  $('sP').textContent=(stats.a?Math.round(stats.c/stats.a*100):0)+'%';
+}
+
+// Lens
+function snapLens(){
+  const cLeft=(sc.clientWidth-CW)/2;
+  lx=cLeft+CX;ly=Math.min(Math.max(yOf(temp)-sc.scrollTop,100),sc.clientHeight-100);
+  lens.style.left=(lx-100)+'px';lens.style.top=(ly-100)+'px';
+}
+$('bLens').onclick=()=>{
+  lensOn=!lensOn;lens.style.display=lensOn?'block':'none';
+  $('bLens').classList.toggle('on',lensOn);$('bLens').setAttribute('aria-pressed',String(lensOn));
+  if(lensOn){snapLens();renderLens()}
+};
+let drag=null;
+lens.addEventListener('pointerdown',e=>{
+  const r=wrap.getBoundingClientRect();
+  drag={dx:e.clientX-r.left-lx,dy:e.clientY-r.top-ly};
+  lens.setPointerCapture(e.pointerId);lens.style.cursor='grabbing';
+});
+lens.addEventListener('pointermove',e=>{
+  if(!drag)return;
+  const r=wrap.getBoundingClientRect();
+  lx=Math.min(Math.max(e.clientX-r.left-drag.dx,0),sc.clientWidth);
+  ly=Math.min(Math.max(e.clientY-r.top-drag.dy,0),sc.clientHeight);
+  lens.style.left=(lx-100)+'px';lens.style.top=(ly-100)+'px';renderLens();
+});
+const endDrag=()=>{drag=null;lens.style.cursor='grab'};
+lens.addEventListener('pointerup',endDrag);lens.addEventListener('pointercancel',endDrag);
+lens.addEventListener('wheel',e=>{sc.scrollTop+=e.deltaY;panUntil=performance.now()+2500;e.preventDefault()},{passive:false});
+
+// Wiring
+$('bStart').onclick=startHeat;
+$('bStop').onclick=stopHeat;
+$('bReset').onclick=reset;
+$('bNew').onclick=newQ;
+$('bCheck').onclick=check;
+$('bShow').onclick=show;
+$('ans').addEventListener('keydown',e=>{if(e.key==='Enter')check()});
+['wheel','touchstart','pointerdown'].forEach(ev=>sc.addEventListener(ev,()=>{panUntil=performance.now()+2500},{passive:true}));
+sc.addEventListener('scroll',()=>{if(lensOn)renderLens()});
+window.addEventListener('resize',()=>{resize();if(lensOn)snapLens()});
+resize();center(false);
+})();
+</script>
+</body>
+</html>
